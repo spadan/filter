@@ -31,9 +31,9 @@ func (d *dataContainer) SetData(l Producer, fieldID FieldID, data interface{}, e
 		}
 	}
 	if !output {
-		panic(fmt.Errorf("handler do not output filed:%s", fieldID))
+		panic(fmt.Errorf("the producer do not output filed:%s", fieldID))
 	}
-	// 数据索引必须唯一
+	// 字段索引必须唯一
 	_, loaded := d.data.LoadOrStore(fieldID, dataHolder{data, err})
 	if loaded {
 		panic(fmt.Errorf("filedID:%s is duplicated", fieldID))
@@ -50,7 +50,7 @@ func (d *dataContainer) GetDependentData(l Consumer, fieldID FieldID) (interface
 		}
 	}
 	if !isDependent {
-		panic(fmt.Errorf("handler do not depend on field:%s", fieldID))
+		panic(fmt.Errorf("the consumer do not depend on field:%s", fieldID))
 	}
 	val, ok := d.data.Load(fieldID)
 	if !ok || val == nil {

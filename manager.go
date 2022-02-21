@@ -32,7 +32,7 @@ func NewDAGManager(loaders []Loader, filters []Filter) Manager {
 	// 将loader和filter转化成统一的节点
 	for _, l := range loaders {
 		if _, exist := nodeMap[l.ID()]; exist {
-			panic(fmt.Errorf("Node id:%s is exist", l.ID()))
+			panic(fmt.Errorf("node id:%s is exist", l.ID()))
 		}
 		node := newNode(loaderAdapter{l})
 		nodes = append(nodes, node)
@@ -40,7 +40,7 @@ func NewDAGManager(loaders []Loader, filters []Filter) Manager {
 	}
 	for _, f := range filters {
 		if _, exist := nodeMap[f.ID()]; exist {
-			panic(fmt.Errorf("Node id:%s is exist", f.ID()))
+			panic(fmt.Errorf("node id:%s is exist", f.ID()))
 		}
 		node := newNode(filterAdapter{f})
 		nodes = append(nodes, node)
@@ -76,8 +76,8 @@ func NewDAGManager(loaders []Loader, filters []Filter) Manager {
 	return wf
 }
 
-// Run 工作流执行入口
-// handlerIDs 指定需要执行的任务id，程序将自动计算执行链路
+// Filter 工作流执行入口
+// filterIDs 指定需要执行的任务id，程序将自动计算执行链路
 func (w *dagManager) Filter(ctx context.Context, req interface{}, dataContainer DataContainer, filterIDs ...string) bool {
 	// 获取子DAG任务节点
 	targetNodes := w.target(filterIDs...)

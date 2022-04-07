@@ -17,13 +17,13 @@ func (n *relationFilter) ID() string {
 	return FilterRelation
 }
 
-func (n *relationFilter) DependentFields() filter.StringSet {
+func (n *relationFilter) ConsumeFields() filter.StringSet {
 	return filter.NewStringSet(FieldUserRelation)
 }
 
-func (n *relationFilter) DoFilter(ctx context.Context, req interface{}, container filter.DataContainer) bool {
+func (n *relationFilter) Filter(ctx context.Context, req interface{}, container filter.DataContainer) bool {
 	log.Printf("filter:%s,go:%v", FilterRelation, ctx.Value("id"))
-	data, err := container.GetDependentData(n, FieldUserRelation)
+	data, err := container.Get(n, FieldUserRelation)
 	if err != nil {
 		log.Printf("get user relation fail,err:%v", err)
 		return false

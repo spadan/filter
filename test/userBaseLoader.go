@@ -19,11 +19,11 @@ func (u *userBaseLoader) ID() string {
 	return LoaderUserBase
 }
 
-func (u *userBaseLoader) DependentFields() filter.StringSet {
+func (u *userBaseLoader) ConsumeFields() filter.StringSet {
 	return filter.NewStringSet()
 }
 
-func (u *userBaseLoader) OutputFields() filter.StringSet {
+func (u *userBaseLoader) ProduceFields() filter.StringSet {
 	return filter.NewStringSet(FieldUserBase)
 }
 
@@ -34,10 +34,10 @@ func (u *userBaseLoader) Load(ctx context.Context, req interface{}, container fi
 	userBase := UserBase{
 		ID:   request.userID,
 		Name: "zhangSan",
-		Age:  15,
+		Age:  21,
 		City: "shenzhen",
 	}
-	container.SetData(u, FieldUserBase, userBase, nil)
+	container.Set(u, FieldUserBase, userBase, nil)
 	time.Sleep(time.Second)
 }
 

@@ -3,6 +3,7 @@ package filter
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -10,13 +11,14 @@ import (
 type handleType uint8
 
 const (
-	handlerType_Loader handleType = 0
-	handlerType_Filter handleType = 1
+	handlerTypeLoader handleType = 0
+	handlerTypeFilter handleType = 1
 )
 
 // Manager 负责编排任务执行的管理器
 type Manager interface {
 	// Filter 编排执行，指定需要执行的filter
+	// req：入参，dataContainer：数据容器，filterIDs：期望运行的过滤器
 	Filter(ctx context.Context, req interface{}, dataContainer DataContainer, filterIDs ...string) bool
 }
 
@@ -49,7 +51,7 @@ func NewDAGManager(loaders []Loader, filters []Filter) Manager {
 	getNodeByField := func(fieldID FieldID) *Node {
 		for _, h := range nodes {
 			// 只有loader生产数据，filter是纯消费数据
-			if h.Type() == handlerType_Loader && h.OutputFields().Contains(fieldID) {
+			if h.Type() == handlerTypeLoader && h.ProduceFields().Contains(fieldID) {
 				return h
 			}
 		}
@@ -57,7 +59,7 @@ func NewDAGManager(loaders []Loader, filters []Filter) Manager {
 	}
 	// 构建node的父子关系
 	for _, node := range nodes {
-		for fieldID := range node.DependentFields() {
+		for fieldID := range node.ConsumeFields() {
 			parent := getNodeByField(fieldID)
 			node.parents = append(node.parents, parent)
 			parent.children = append(parent.children, node)
@@ -89,17 +91,17 @@ func (w *dagManager) Filter(ctx context.Context, req interface{}, dataContainer 
 	for _, h := range targetNodes {
 		nodeInDegree[h.ID()] = len(h.parents)
 		if nodeInDegree[h.ID()] == 0 {
-			if h.Type() == handlerType_Loader {
+			if h.Type() == handlerTypeLoader {
 				startLoaderNodes = append(startLoaderNodes, h)
 			}
-			if h.Type() == handlerType_Filter {
+			if h.Type() == handlerTypeFilter {
 				startFilterNodes = append(startFilterNodes, h)
 			}
 		}
 	}
 	var mutex sync.Mutex
 	resultChan := make(chan bool, len(targetNodes))
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	if len(startFilterNodes) > 0 {
 		go w.runFilterNodes(context.WithValue(ctx, "id", time.Now().Nanosecond()), startFilterNodes, req, dataContainer, resultChan)
@@ -108,18 +110,23 @@ func (w *dagManager) Filter(ctx context.Context, req interface{}, dataContainer 
 		go w.runLoaderNode(context.WithValue(ctx, "id", time.Now().Nanosecond()), node, nodeInDegree, req, dataContainer, &mutex, resultChan)
 	}
 	var doneNum int
-	for isStop := range resultChan {
-		// 任一filter返回不通过则流程结束，最终结果为不通过
-		if isStop {
+	for {
+		select {
+		case isStop := <-resultChan:
+			// 任一filter返回不通过则流程结束，最终结果为不通过
+			if isStop {
+				return true
+			}
+			doneNum++
+			// 所有节点执行完毕
+			if doneNum == len(targetNodes) {
+				return false
+			}
+		case <-ctx.Done():
+			log.Println("time out")
 			return true
 		}
-		doneNum++
-		// 所有节点执行完毕
-		if doneNum == len(targetNodes) {
-			return false
-		}
 	}
-	return false
 }
 
 // runLoaderNode 编排执行DAG工作流
@@ -151,10 +158,10 @@ func (w *dagManager) runLoaderNode(ctx context.Context, node *Node, inDegree map
 		for _, child := range node.children {
 			inDegree[child.ID()]--
 			if inDegree[child.ID()] == 0 {
-				if child.Type() == handlerType_Loader {
+				if child.Type() == handlerTypeLoader {
 					runnableLoaders = append(runnableLoaders, child)
 				}
-				if child.Type() == handlerType_Filter {
+				if child.Type() == handlerTypeFilter {
 					runnableFilters = append(runnableFilters, child)
 				}
 			}
@@ -214,8 +221,9 @@ func (w *dagManager) target(filterIDs ...string) []*Node {
 	// 从目标filter开始dfs
 	for _, filterID := range filterIDs {
 		h, ok := w.nodeMap[filterID]
-		if !ok || h.Type() != handlerType_Filter {
-			panic("filter is not exist or not a filter type")
+		if !ok || h.Type() != handlerTypeFilter {
+			log.Println("filter is not exist or not a filter type")
+			continue
 		}
 		dfs(h)
 	}
@@ -269,7 +277,7 @@ type loaderAdapter struct {
 }
 
 func (l loaderAdapter) Type() handleType {
-	return handlerType_Loader
+	return handlerTypeLoader
 }
 
 func (l loaderAdapter) Process(ctx context.Context, req interface{}, container DataContainer) (stop bool) {
@@ -281,16 +289,16 @@ type filterAdapter struct {
 	Filter
 }
 
-func (f filterAdapter) OutputFields() StringSet {
+func (f filterAdapter) ProduceFields() StringSet {
 	return NewStringSet()
 }
 
 func (f filterAdapter) Type() handleType {
-	return handlerType_Filter
+	return handlerTypeFilter
 }
 
 func (f filterAdapter) Process(ctx context.Context, req interface{}, container DataContainer) (stop bool) {
-	return f.DoFilter(ctx, req, container)
+	return f.Filter.Filter(ctx, req, container)
 }
 
 type Node struct {

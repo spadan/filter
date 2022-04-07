@@ -5,8 +5,8 @@ import "context"
 // Filter 数据过滤器
 type Filter interface {
 	Consumer
-	ID() string                                                                  // 唯一id
-	DoFilter(ctx context.Context, req interface{}, container DataContainer) bool // 过滤逻辑，1.从数据容器中获取依赖数据，2.执行过滤
+	ID() string                                                                // 唯一id
+	Filter(ctx context.Context, req interface{}, container DataContainer) bool // 过滤逻辑，1.从数据容器中获取依赖数据，2.执行过滤
 }
 
 // Loader 数据加载器
@@ -18,9 +18,9 @@ type Loader interface {
 }
 
 type Producer interface {
-	OutputFields() StringSet // 生成的字段
+	ProduceFields() StringSet // 生成的字段
 }
 
 type Consumer interface {
-	DependentFields() StringSet // 消费的字段
+	ConsumeFields() StringSet // 消费的字段
 }
